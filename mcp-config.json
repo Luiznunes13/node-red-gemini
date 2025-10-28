@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "node-red": {
+      "command": "python",
+      "args": ["main.py"],
+      "cwd": "C:\\Users\\44057824820\\Documents\\Projetos_pos\\mcp-node-red"
+    }
+  }
+}
