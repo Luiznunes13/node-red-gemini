@@ -24,7 +24,7 @@ logger = logging.getLogger("mcp-node-red")
 server = Server("mcp-node-red")
 
 # Configurações padrão do Node-RED
-NODE_RED_BASE_URL = "http://localhost:1880"
+NODE_RED_BASE_URL = "http://192.168.0.36:1880"
 NODE_RED_ADMIN_AUTH = None  # Pode ser configurado se necessário
 
 class NodeRedAPI:
@@ -238,41 +238,85 @@ async def handle_list_tools() -> List[Tool]:
                 "required": ["file_path"]
             }
         ),
+
         Tool(
-            name="control_raspberry_pi_led",
-            description="Controla um LED conectado ao Raspberry Pi via GPIO através do Node-RED",
+            name="control_gpio_mcp",
+            description="Controla GPIO individual via API MCP do Node-RED",
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "pin": {
+                        "type": "integer",
+                        "description": "Número do pino GPIO (2-27 BCM)",
+                        "minimum": 2,
+                        "maximum": 27
+                    },
                     "state": {
                         "type": "string",
-                        "enum": ["on", "off"],
-                        "description": "Estado desejado do LED (on para ligar, off para desligar)"
-                    },
-                    "gpio_pin": {
-                        "type": "integer",
-                        "description": "Número do pino GPIO (opcional, padrão: 17)",
-                        "default": 17
+                        "enum": ["on", "off", "true", "false", "1", "0"],
+                        "description": "Estado desejado do GPIO"
                     }
                 },
-                "required": ["state"]
+                "required": ["pin", "state"]
             }
         ),
         Tool(
-            name="create_raspberry_pi_led_flow",
-            description="Cria um flow completo no Node-RED para controlar LED via GPIO no Raspberry Pi",
+            name="control_multiple_gpio_mcp",
+            description="Controla múltiplas GPIOs simultaneamente via API MCP do Node-RED",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "flow_name": {
+                    "gpios": {
+                        "type": "array",
+                        "description": "Lista de GPIOs para controlar",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pin": {
+                                    "type": "integer",
+                                    "minimum": 2,
+                                    "maximum": 27
+                                },
+                                "state": {
+                                    "type": "string",
+                                    "enum": ["on", "off", "true", "false", "1", "0"]
+                                }
+                            },
+                            "required": ["pin", "state"]
+                        }
+                    }
+                },
+                "required": ["gpios"]
+            }
+        ),
+        Tool(
+            name="get_gpio_status_mcp",
+            description="Obtém status atual de todas as GPIOs via API MCP do Node-RED",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="list_mcp_tools",
+            description="Lista todas as ferramentas MCP disponíveis no Node-RED",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="deploy_mcp_gpio_flow",
+            description="Implanta o flow MCP GPIO completo no Node-RED",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_red_url": {
                         "type": "string",
-                        "description": "Nome do flow para controle de LED",
-                        "default": "Controle LED Raspberry Pi"
-                    },
-                    "gpio_pin": {
-                        "type": "integer",
-                        "description": "Número do pino GPIO",
-                        "default": 17
+                        "description": "URL do Node-RED",
+                        "default": "http://localhost:1880"
                     }
                 },
                 "required": []
@@ -302,10 +346,17 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
             return await export_node_red_flow(arguments)
         elif name == "import_node_red_flow":
             return await import_node_red_flow(arguments)
-        elif name == "control_raspberry_pi_led":
-            return await control_raspberry_pi_led(arguments)
-        elif name == "create_raspberry_pi_led_flow":
-            return await create_raspberry_pi_led_flow(arguments)
+
+        elif name == "control_gpio_mcp":
+            return await control_gpio_mcp(arguments)
+        elif name == "control_multiple_gpio_mcp":
+            return await control_multiple_gpio_mcp(arguments)
+        elif name == "get_gpio_status_mcp":
+            return await get_gpio_status_mcp(arguments)
+        elif name == "list_mcp_tools":
+            return await list_mcp_tools(arguments)
+        elif name == "deploy_mcp_gpio_flow":
+            return await deploy_mcp_gpio_flow(arguments)
         else:
             raise ValueError(f"Ferramenta desconhecida: {name}")
     
@@ -570,100 +621,275 @@ async def import_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
             text=f"Erro ao importar flow: {str(e)}"
         )]
 
-async def control_raspberry_pi_led(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Controla um LED conectado ao Raspberry Pi via GPIO através do Node-RED"""
+
+
+async def control_gpio_mcp(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Controla GPIO individual via API MCP do Node-RED"""
     try:
+        pin = arguments["pin"]
         state = arguments["state"]
-        gpio_pin = arguments.get("gpio_pin", 17)
         
-        # Criar flow para controle do LED
-        flow_data = {
-            "id": str(uuid.uuid4()),
-            "label": "Controle LED Raspberry Pi",
-            "nodes": [
-                {
-                    "id": str(uuid.uuid4()),
-                    "type": "rpi-gpio out",
-                    "name": "LED",
-                    "pin": gpio_pin,
-                    "state": state,
-                    "wires": []
-                }
-            ],
-            "subflows": [],
-            "configs": []
+        # Dados para a requisição MCP
+        mcp_data = {
+            "tool": "control_gpio",
+            "params": {
+                "pin": pin,
+                "state": state
+            }
         }
         
-        # Obter flows existentes
-        existing_flows = await node_red_api.get_flows()
-        
-        # Adicionar novo flow
-        existing_flows.append(flow_data)
-        
-        # Enviar para Node-RED
-        result = await node_red_api.post_flows(existing_flows)
+        # Fazer requisição para o endpoint MCP do Node-RED
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{node_red_api.base_url}/mcp/gpio/control",
+                json=mcp_data,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
         
         return [TextContent(
             type="text",
-            text=f"Flow de controle de LED criado com sucesso!\n"
+            text=f"GPIO {pin} controlada com sucesso!\n"
+                 f"Estado: {state}\n"
                  f"Resultado: {json.dumps(result, indent=2)}"
         )]
         
     except Exception as e:
-        logger.error(f"Erro ao criar flow de controle de LED: {str(e)}")
+        logger.error(f"Erro ao controlar GPIO: {str(e)}")
         return [TextContent(
             type="text",
-            text=f"Erro ao criar flow de controle de LED: {str(e)}"
+            text=f"Erro ao controlar GPIO: {str(e)}"
         )]
 
-async def create_raspberry_pi_led_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Cria um flow completo no Node-RED para controlar LED via GPIO no Raspberry Pi"""
+async def control_multiple_gpio_mcp(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Controla múltiplas GPIOs simultaneamente via API MCP do Node-RED"""
     try:
-        flow_name = arguments.get("flow_name", "Controle LED Raspberry Pi")
-        gpio_pin = arguments.get("gpio_pin", 17)
+        gpios = arguments["gpios"]
         
-        # Gerar ID único para o flow
-        import uuid
-        flow_id = str(uuid.uuid4())
-        
-        # Criar estrutura do flow
-        flow_data = {
-            "id": flow_id,
-            "label": flow_name,
-            "nodes": [
-                {
-                    "id": str(uuid.uuid4()),
-                    "type": "rpi-gpio out",
-                    "name": "LED",
-                    "pin": gpio_pin,
-                    "state": "off",
-                    "wires": []
-                }
-            ],
-            "subflows": [],
-            "configs": []
+        # Dados para a requisição MCP
+        mcp_data = {
+            "tool": "control_multiple_gpio",
+            "params": {
+                "gpios": gpios
+            }
         }
         
-        # Obter flows existentes
-        existing_flows = await node_red_api.get_flows()
-        
-        # Adicionar novo flow
-        existing_flows.append(flow_data)
-        
-        # Enviar para Node-RED
-        result = await node_red_api.post_flows(existing_flows)
+        # Fazer requisição para o endpoint MCP do Node-RED
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{node_red_api.base_url}/mcp/gpio/control",
+                json=mcp_data,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
         
         return [TextContent(
             type="text",
-            text=f"Flow completo para controle de LED criado com sucesso!\n"
+            text=f"Múltiplas GPIOs controladas com sucesso!\n"
+                 f"Total: {len(gpios)} GPIOs\n"
                  f"Resultado: {json.dumps(result, indent=2)}"
         )]
         
     except Exception as e:
-        logger.error(f"Erro ao criar flow completo de controle de LED: {str(e)}")
+        logger.error(f"Erro ao controlar múltiplas GPIOs: {str(e)}")
         return [TextContent(
             type="text",
-            text=f"Erro ao criar flow completo de controle de LED: {str(e)}"
+            text=f"Erro ao controlar múltiplas GPIOs: {str(e)}"
+        )]
+
+async def get_gpio_status_mcp(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Obtém status atual de todas as GPIOs via API MCP do Node-RED"""
+    try:
+        # Fazer requisição para o endpoint de status
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{node_red_api.base_url}/mcp/gpio/status",
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
+        
+        # Extrair informações relevantes
+        gpio_info = result.get("result", {})
+        available_pins = gpio_info.get("available_pins", [])
+        active_pins = gpio_info.get("active_pins", [])
+        states = gpio_info.get("states", {})
+        
+        status_text = f"Status das GPIOs:\n"
+        status_text += f"• Pinos disponíveis: {len(available_pins)} ({', '.join(map(str, available_pins))})\n"
+        status_text += f"• Pinos ativos: {len(active_pins)} ({', '.join(map(str, active_pins))})\n"
+        status_text += f"• Modo: {gpio_info.get('pin_mode', 'BCM')}\n\n"
+        
+        if states:
+            status_text += "Estados atuais:\n"
+            for pin, state_info in states.items():
+                status_text += f"  GPIO {pin}: {state_info.get('state', 'unknown')} "
+                status_text += f"(valor: {state_info.get('value', 'N/A')}) "
+                status_text += f"- {state_info.get('timestamp', 'N/A')}\n"
+        else:
+            status_text += "Nenhuma GPIO ativa no momento.\n"
+        
+        status_text += f"\nDados completos: {json.dumps(result, indent=2)}"
+        
+        return [TextContent(
+            type="text",
+            text=status_text
+        )]
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter status das GPIOs: {str(e)}")
+        return [TextContent(
+            type="text",
+            text=f"Erro ao obter status das GPIOs: {str(e)}"
+        )]
+
+async def list_mcp_tools(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Lista todas as ferramentas MCP disponíveis no Node-RED"""
+    try:
+        # Fazer requisição para o endpoint de ferramentas
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{node_red_api.base_url}/mcp/tools",
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
+        
+        tools = result.get("tools", [])
+        
+        tools_text = f"Ferramentas MCP disponíveis no Node-RED ({len(tools)} total):\n\n"
+        
+        for i, tool in enumerate(tools, 1):
+            name = tool.get("name", "N/A")
+            description = tool.get("description", "N/A")
+            parameters = tool.get("parameters", {})
+            
+            tools_text += f"{i}. {name}\n"
+            tools_text += f"   Descrição: {description}\n"
+            
+            if parameters:
+                tools_text += f"   Parâmetros:\n"
+                for param_name, param_info in parameters.items():
+                    param_type = param_info.get("type", "string")
+                    param_desc = param_info.get("description", "N/A")
+                    required = " (obrigatório)" if param_info.get("required") else ""
+                    tools_text += f"     • {param_name} ({param_type}){required}: {param_desc}\n"
+            
+            tools_text += "\n"
+        
+        tools_text += f"Dados completos: {json.dumps(result, indent=2)}"
+        
+        return [TextContent(
+            type="text",
+            text=tools_text
+        )]
+        
+    except Exception as e:
+        logger.error(f"Erro ao listar ferramentas MCP: {str(e)}")
+        return [TextContent(
+            type="text",
+            text=f"Erro ao listar ferramentas MCP: {str(e)}"
+        )]
+
+async def deploy_mcp_gpio_flow(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Implanta o flow MCP GPIO completo no Node-RED"""
+    try:
+        node_red_url = arguments.get("node_red_url", "http://localhost:1880")
+        
+        # Carregar o flow MCP GPIO do arquivo
+        flow_file = Path(__file__).parent / "flows_mcp_gpio_completo.json"
+        
+        if not flow_file.exists():
+            return [TextContent(
+                type="text",
+                text=f"❌ Arquivo de flow não encontrado: {flow_file}\n"
+                     f"Execute primeiro o script 'deploy_mcp_gpio_flow.py' para criar o arquivo."
+            )]
+        
+        with open(flow_file, 'r', encoding='utf-8') as f:
+            flow_data = json.load(f)
+        
+        # Fazer backup dos flows existentes
+        async with httpx.AsyncClient() as client:
+            backup_response = await client.get(f"{node_red_url}/flows")
+            
+            if backup_response.status_code == 200:
+                backup_file = Path(__file__).parent / "flows_backup.json"
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    json.dump(backup_response.json(), f, indent=2, ensure_ascii=False)
+        
+        # Obter flows existentes e adicionar o novo
+        existing_flows = backup_response.json() if backup_response.status_code == 200 else []
+        updated_flows = existing_flows + flow_data
+        
+        # Deploy do flow atualizado
+        async with httpx.AsyncClient() as client:
+            deploy_response = await client.post(
+                f"{node_red_url}/flows",
+                json=updated_flows,
+                headers={'Content-Type': 'application/json'}
+            )
+            deploy_response.raise_for_status()
+        
+        # Testar endpoints após deploy
+        await asyncio.sleep(2)  # Aguardar processamento
+        
+        test_results = []
+        
+        # Teste 1: Listar ferramentas
+        try:
+            async with httpx.AsyncClient() as client:
+                tools_response = await client.get(f"{node_red_url}/mcp/tools")
+                if tools_response.status_code == 200:
+                    tools = tools_response.json()
+                    test_results.append(f"✅ GET /mcp/tools - {len(tools.get('tools', []))} ferramentas")
+                else:
+                    test_results.append(f"❌ GET /mcp/tools - Status: {tools_response.status_code}")
+        except Exception as e:
+            test_results.append(f"❌ GET /mcp/tools - Erro: {e}")
+        
+        # Teste 2: Status das GPIOs
+        try:
+            async with httpx.AsyncClient() as client:
+                status_response = await client.get(f"{node_red_url}/mcp/gpio/status")
+                if status_response.status_code == 200:
+                    status = status_response.json()
+                    pins_available = len(status.get('result', {}).get('available_pins', []))
+                    test_results.append(f"✅ GET /mcp/gpio/status - {pins_available} pinos disponíveis")
+                else:
+                    test_results.append(f"❌ GET /mcp/gpio/status - Status: {status_response.status_code}")
+        except Exception as e:
+            test_results.append(f"❌ GET /mcp/gpio/status - Erro: {e}")
+        
+        success_text = f"🎉 Flow MCP GPIO implantado com sucesso!\n\n"
+        success_text += f"🔧 Endpoints disponíveis:\n"
+        success_text += f"   • POST {node_red_url}/mcp/gpio/control\n"
+        success_text += f"   • GET  {node_red_url}/mcp/gpio/status\n"
+        success_text += f"   • GET  {node_red_url}/mcp/tools\n\n"
+        success_text += f"🧪 Testes dos endpoints:\n"
+        success_text += "\n".join(test_results)
+        success_text += f"\n\n📚 Exemplos de uso:\n"
+        success_text += f"# Ligar GPIO 20\n"
+        success_text += f'curl -X POST {node_red_url}/mcp/gpio/control \\\n'
+        success_text += f'  -H "Content-Type: application/json" \\\n'
+        success_text += f'  -d \'{{"tool": "control_gpio", "params": {{"pin": 20, "state": "on"}}}}\'\n\n'
+        success_text += f"# Controlar múltiplas GPIOs\n"
+        success_text += f'curl -X POST {node_red_url}/mcp/gpio/control \\\n'
+        success_text += f'  -H "Content-Type: application/json" \\\n'
+        success_text += f'  -d \'{{"tool": "control_multiple_gpio", "params": {{"gpios": [{{"pin": 20, "state": "on"}}, {{"pin": 21, "state": "off"}}]}}}}\''
+        
+        return [TextContent(
+            type="text",
+            text=success_text
+        )]
+        
+    except Exception as e:
+        logger.error(f"Erro ao implantar flow MCP GPIO: {str(e)}")
+        return [TextContent(
+            type="text",
+            text=f"Erro ao implantar flow MCP GPIO: {str(e)}"
         )]
 
 # Função principal para executar o servidor
