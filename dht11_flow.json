@@ -1,0 +1,382 @@
+[
+    {
+        "id": "dht11_flow",
+        "type": "tab",
+        "label": "DHT11 - Sensor Temp/Umidade",
+        "disabled": false,
+        "info": "Flow para ler sensor DHT11 no GPIO 4 (pino físico 7)"
+    },
+    {
+        "id": "inject_read_sensor",
+        "type": "inject",
+        "z": "dht11_flow",
+        "name": "Ler a cada 5s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "5",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 100,
+        "wires": [
+            ["dht11_sensor"]
+        ]
+    },
+    {
+        "id": "dht11_sensor",
+        "type": "rpi-dht22",
+        "z": "dht11_flow",
+        "name": "DHT11 GPIO4",
+        "topic": "rpi-dht22",
+        "dht": "11",
+        "pintype": "0",
+        "pin": "4",
+        "x": 330,
+        "y": 100,
+        "wires": [
+            ["format_data", "debug_raw"]
+        ]
+    },
+    {
+        "id": "format_data",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "Formatar Dados",
+        "func": "// Formata os dados do DHT11\nconst temperatura = msg.payload;\nconst umidade = msg.humidity;\n\nmsg.payload = {\n    temperatura: temperatura,\n    umidade: umidade,\n    unidade_temp: '°C',\n    unidade_umid: '%',\n    timestamp: new Date().toISOString(),\n    sensor: 'DHT11',\n    gpio: 4,\n    valido: msg.isValid || true\n};\n\nmsg.topic = 'sensor/dht11';\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 540,
+        "y": 100,
+        "wires": [
+            ["debug_formatted", "display_temp", "display_humidity", "http_endpoint_handler"]
+        ]
+    },
+    {
+        "id": "debug_raw",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "Debug Raw",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 530,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "debug_formatted",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "Dados Formatados",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "display_temp",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "Extrair Temperatura",
+        "func": "msg.payload = msg.payload.temperatura + '°C';\nmsg.topic = 'Temperatura';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 780,
+        "y": 100,
+        "wires": [
+            ["debug_temp"]
+        ]
+    },
+    {
+        "id": "display_humidity",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "Extrair Umidade",
+        "func": "msg.payload = msg.payload.umidade + '%';\nmsg.topic = 'Umidade';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 160,
+        "wires": [
+            ["debug_humidity"]
+        ]
+    },
+    {
+        "id": "debug_temp",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "🌡️ Temperatura",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 990,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "debug_humidity",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "💧 Umidade",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 980,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "http_in_temp",
+        "type": "http in",
+        "z": "dht11_flow",
+        "name": "GET /sensor/temp",
+        "url": "/sensor/temp",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 140,
+        "y": 260,
+        "wires": [
+            ["inject_now"]
+        ]
+    },
+    {
+        "id": "inject_now",
+        "type": "change",
+        "z": "dht11_flow",
+        "name": "Trigger Read",
+        "rules": [
+            {
+                "p": "payload",
+                "t": "set",
+                "pt": "msg",
+                "to": "",
+                "tot": "date"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 350,
+        "y": 260,
+        "wires": [
+            ["dht11_sensor"]
+        ]
+    },
+    {
+        "id": "http_endpoint_handler",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "Preparar HTTP Response",
+        "func": "// Armazena a última leitura em contexto global\nglobal.set('last_dht11_reading', msg.payload);\n\n// Se houver uma requisição HTTP pendente\nif (flow.get('pending_http_request')) {\n    msg.statusCode = 200;\n    msg.headers = {'Content-Type': 'application/json'};\n    flow.set('pending_http_request', false);\n    return msg;\n}\n\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 260,
+        "wires": [
+            ["http_response"]
+        ]
+    },
+    {
+        "id": "http_response",
+        "type": "http response",
+        "z": "dht11_flow",
+        "name": "Resposta HTTP",
+        "statusCode": "",
+        "headers": {},
+        "x": 1030,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "http_in_temp_mcp",
+        "type": "http in",
+        "z": "dht11_flow",
+        "name": "GET /mcp/sensor/temp",
+        "url": "/mcp/sensor/temp",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 160,
+        "y": 340,
+        "wires": [
+            ["mcp_format_response"]
+        ]
+    },
+    {
+        "id": "mcp_format_response",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "MCP Response Format",
+        "func": "// Pega a última leitura\nconst lastReading = global.get('last_dht11_reading') || {\n    temperatura: 0,\n    umidade: 0,\n    timestamp: new Date().toISOString(),\n    sensor: 'DHT11',\n    gpio: 4,\n    valido: false\n};\n\n// Formata no padrão MCP\nmsg.payload = {\n    tool: 'sensor_reading',\n    result: {\n        success: true,\n        sensor: 'DHT11',\n        gpio: 4,\n        data: lastReading,\n        timestamp: new Date().toISOString()\n    }\n};\n\nmsg.statusCode = 200;\nmsg.headers = {'Content-Type': 'application/json'};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 340,
+        "wires": [
+            ["http_response_mcp", "debug_mcp"]
+        ]
+    },
+    {
+        "id": "http_response_mcp",
+        "type": "http response",
+        "z": "dht11_flow",
+        "name": "Resposta MCP",
+        "statusCode": "",
+        "headers": {},
+        "x": 650,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "debug_mcp",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "MCP Response",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 660,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "validate_readings",
+        "type": "function",
+        "z": "dht11_flow",
+        "name": "Validar Leituras",
+        "func": "const temp = msg.payload.temperatura;\nconst umid = msg.payload.umidade;\n\n// Validar ranges do DHT11\n// Temperatura: 0-50°C\n// Umidade: 20-90%\n\nlet alerts = [];\n\nif (temp < 0 || temp > 50) {\n    alerts.push('⚠️ Temperatura fora do range (0-50°C)');\n}\n\nif (umid < 20 || umid > 90) {\n    alerts.push('⚠️ Umidade fora do range (20-90%)');\n}\n\nif (temp > 30) {\n    alerts.push('🔥 Temperatura alta: ' + temp + '°C');\n}\n\nif (temp < 15) {\n    alerts.push('❄️ Temperatura baixa: ' + temp + '°C');\n}\n\nif (umid > 70) {\n    alerts.push('💧 Umidade alta: ' + umid + '%');\n}\n\nif (umid < 30) {\n    alerts.push('🏜️ Ar seco: ' + umid + '%');\n}\n\nif (alerts.length > 0) {\n    msg.alerts = alerts;\n    return [null, msg];\n} else {\n    return [msg, null];\n}\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 220,
+        "wires": [
+            ["debug_ok"],
+            ["debug_alerts"]
+        ]
+    },
+    {
+        "id": "debug_ok",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "✅ Leituras OK",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 990,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "debug_alerts",
+        "type": "debug",
+        "z": "dht11_flow",
+        "name": "⚠️ Alertas",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "alerts",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 970,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "comment_reading",
+        "type": "comment",
+        "z": "dht11_flow",
+        "name": "Leitura do Sensor DHT11",
+        "info": "",
+        "x": 150,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "comment_api",
+        "type": "comment",
+        "z": "dht11_flow",
+        "name": "API HTTP para Consultar Sensor",
+        "info": "",
+        "x": 170,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "comment_mcp",
+        "type": "comment",
+        "z": "dht11_flow",
+        "name": "API MCP para Integração",
+        "info": "",
+        "x": 160,
+        "y": 300,
+        "wires": []
+    }
+]
