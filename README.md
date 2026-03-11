@@ -1,4 +1,195 @@
-# 🚀 Servidor MCP para Node-RED + GPIO
+# node-red-gemini
+
+Servidor **Model Context Protocol (MCP)** que conecta o **Gemini CLI** ao **Node-RED**, publicando comandos via **MQTT** para um **ESP8266** controlar GPIOs físicos em tempo real.
+
+```
+Gemini CLI → MCP (main.py) → Node-RED → MQTT (Mosquitto) → ESP8266 → GPIO
+```
+
+## Pré-requisitos
+
+| Componente | Versão mínima |
+|---|---|
+| Python | 3.8+ |
+| Node-RED | 3.0+ |
+| Mosquitto | 2.0+ |
+| Arduino IDE | 1.8+ (ESP8266 core 3.0.2) |
+| Gemini CLI | qualquer |
+
+Bibliotecas Arduino necessárias: `PubSubClient >= 2.8`, `ArduinoJson >= 6.x`
+
+## Instalação
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/Luiznunes13/node-red-gemini.git
+cd node-red-gemini
+```
+
+### 2. Ambiente Python
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Mosquitto
+
+```bash
+sudo apt install mosquitto mosquitto-clients
+
+# Permitir conexões externas (necessário para o ESP8266)
+sudo nano /etc/mosquitto/conf.d/local.conf
+```
+
+Conteúdo do arquivo:
+```
+listener 1883 0.0.0.0
+allow_anonymous true
+```
+
+```bash
+sudo systemctl restart mosquitto
+```
+
+### 4. Node-RED
+
+```bash
+# Instalar
+npm install -g node-red
+
+# Importar o flow (Menu → Import → selecionar o arquivo)
+mcp_mqtt_esp8266.json
+```
+
+Após importar, clique em **Implementar**.
+
+### 5. Firmware ESP8266
+
+```bash
+# Copiar e preencher com suas credenciais
+cp esp8266_firmware/config.h.example esp8266_firmware/config.h
+```
+
+Edite `config.h`:
+```c
+#define WIFI_SSID     "SuaRedeWiFi"
+#define WIFI_PASSWORD "SuaSenha"
+#define MQTT_HOST     "192.168.0.X"   // IP do servidor com Mosquitto
+#define LED_PIN       14              // D5 no NodeMCU
+#define GPIO_ACTIVE_LOW true          // true para módulos NodeMCU
+```
+
+Abra `esp8266_firmware/esp8266_firmware.ino` no Arduino IDE e faça o upload.
+
+### 6. Configurar Gemini CLI
+
+Edite `mcp-config.json` com o caminho correto:
+```json
+{
+  "mcpServers": {
+    "node-red": {
+      "command": "python3",
+      "args": ["main.py"],
+      "cwd": "/caminho/para/node-red-gemini"
+    }
+  }
+}
+```
+
+Inicie o Gemini com o servidor MCP:
+```bash
+gemini --mcp mcp-config.json
+```
+
+## Ferramentas MCP disponíveis
+
+| Ferramenta | Descrição |
+|---|---|
+| `control_gpio_mcp` | Controla um pino GPIO individual |
+| `control_multiple_gpio_mcp` | Controla múltiplos pinos simultaneamente |
+| `get_gpio_status_mcp` | Retorna o estado atual de todos os pinos |
+| `list_mcp_tools` | Lista as ferramentas disponíveis no Node-RED |
+| `deploy_mcp_gpio_flow` | Implanta o flow MCP GPIO no Node-RED |
+
+## Uso
+
+Com o Node-RED rodando, o ESP8266 conectado e o Gemini CLI iniciado:
+
+```
+> ligue o led no pino D5
+> apague o led do pino 14
+> qual o status das gpios?
+> ligue os pinos 12 e 13 e apague o 14
+```
+
+## Tópicos MQTT
+
+| Tópico | Direção | Payload | Descrição |
+|---|---|---|---|
+| `mcp/gpio/{pin}/set` | → ESP8266 | `"1"` / `"0"` | Liga/desliga pino |
+| `mcp/gpio/all/set` | → ESP8266 | JSON array | Controla múltiplos pinos |
+| `mcp/gpio/{pin}/status` | ← ESP8266 | `"1"` / `"0"` | Confirma estado do pino |
+| `mcp/device/esp8266-01/online` | ← ESP8266 | `"1"` / `"0"` | Heartbeat de conexão |
+| `mcp/device/esp8266-01/info` | ← ESP8266 | JSON | IP, RSSI, versão do firmware |
+
+## API REST (Node-RED)
+
+```bash
+# Ligar GPIO 14
+curl -X POST http://localhost:1880/mcp/gpio/control \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"control_gpio","params":{"pin":14,"state":"on"}}'
+
+# Status de todos os pinos
+curl http://localhost:1880/mcp/gpio/status
+
+# Listar ferramentas
+curl http://localhost:1880/mcp/tools
+```
+
+## Estrutura do projeto
+
+```
+node-red-gemini/
+├── main.py                        # Servidor MCP (5 ferramentas GPIO)
+├── mcp_mqtt_esp8266.json          # Flow Node-RED com MQTT
+├── mcp-config.json                # Configuração do Gemini CLI
+├── requirements.txt               # Dependências Python
+├── .gitignore
+├── esp8266_firmware/
+│   ├── esp8266_firmware.ino       # Firmware principal
+│   ├── config.h                   # Credenciais (ignorado pelo git)
+│   ├── config.h.example           # Template de configuração
+│   └── README.md
+└── README.md
+```
+
+## Pinos válidos no ESP8266 (NodeMCU)
+
+| Pino NodeMCU | GPIO | Observação |
+|---|---|---|
+| D1 | 5 | |
+| D2 | 4 | |
+| D3 | 0 | Boot — evitar |
+| D4 | 2 | LED onboard (lógica invertida) |
+| D5 | 14 | Recomendado |
+| D6 | 12 | |
+| D7 | 13 | |
+| D8 | 15 | Boot — evitar |
+
+## Segurança
+
+- `esp8266_firmware/config.h` está no `.gitignore` — nunca commite credenciais
+- Use `config.h.example` como template para novos dispositivos
+- Para produção, configure autenticação MQTT (`MQTT_USER` / `MQTT_PASSWORD` em `config.h`)
+
+## Licença
+
+MIT
+
 
 Servidor Model Context Protocol (MCP) para automação e controle avançado do Node-RED via linguagem natural, com **controle completo de GPIO** do Raspberry Pi e **API MCP padronizada**.
 

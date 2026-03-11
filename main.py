@@ -7,7 +7,6 @@ Este servidor fornece ferramentas para criar, gerenciar e executar flows no Node
 import asyncio
 import json
 import logging
-import uuid
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import httpx
@@ -24,7 +23,7 @@ logger = logging.getLogger("mcp-node-red")
 server = Server("mcp-node-red")
 
 # Configurações padrão do Node-RED
-NODE_RED_BASE_URL = "http://192.168.0.36:1880"
+NODE_RED_BASE_URL = "http://192.168.0.44:1880"
 NODE_RED_ADMIN_AUTH = None  # Pode ser configurado se necessário
 
 class NodeRedAPI:
@@ -102,143 +101,6 @@ async def handle_list_tools() -> List[Tool]:
     Lista todas as ferramentas disponíveis no servidor MCP
     """
     return [
-        Tool(
-            name="create_node_red_flow",
-            description="Cria um novo flow no Node-RED com configurações especificadas",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "flow_name": {
-                        "type": "string",
-                        "description": "Nome do flow a ser criado"
-                    },
-                    "nodes": {
-                        "type": "array",
-                        "description": "Lista de nós a serem incluídos no flow",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {"type": "string"},
-                                "name": {"type": "string"},
-                                "config": {"type": "object"}
-                            }
-                        }
-                    }
-                },
-                "required": ["flow_name", "nodes"]
-            }
-        ),
-        Tool(
-            name="get_node_red_flow",
-            description="Obtém informações sobre um flow específico do Node-RED",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "flow_id": {
-                        "type": "string",
-                        "description": "ID do flow a ser consultado"
-                    }
-                },
-                "required": ["flow_id"]
-            }
-        ),
-        Tool(
-            name="update_node_red_flow",
-            description="Atualiza um flow existente no Node-RED",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "flow_id": {
-                        "type": "string",
-                        "description": "ID do flow a ser atualizado"
-                    },
-                    "updates": {
-                        "type": "object",
-                        "description": "Configurações a serem atualizadas no flow"
-                    }
-                },
-                "required": ["flow_id", "updates"]
-            }
-        ),
-        Tool(
-            name="delete_node_red_flow",
-            description="Remove um flow do Node-RED",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "flow_id": {
-                        "type": "string",
-                        "description": "ID do flow a ser removido"
-                    }
-                },
-                "required": ["flow_id"]
-            }
-        ),
-        Tool(
-            name="deploy_node_red_flows",
-            description="Faz o deploy de todos os flows no Node-RED",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "deployment_type": {
-                        "type": "string",
-                        "enum": ["full", "nodes", "flows"],
-                        "description": "Tipo de deployment a ser realizado",
-                        "default": "full"
-                    }
-                }
-            }
-        ),
-        Tool(
-            name="get_node_red_nodes",
-            description="Lista todos os tipos de nós disponíveis no Node-RED",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "category": {
-                        "type": "string",
-                        "description": "Categoria específica de nós (opcional)"
-                    }
-                }
-            }
-        ),
-        Tool(
-            name="export_node_red_flow",
-            description="Exporta um flow do Node-RED para um arquivo JSON",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "flow_id": {
-                        "type": "string",
-                        "description": "ID do flow a ser exportado"
-                    },
-                    "file_path": {
-                        "type": "string",
-                        "description": "Caminho para salvar o arquivo exportado"
-                    }
-                },
-                "required": ["flow_id", "file_path"]
-            }
-        ),
-        Tool(
-            name="import_node_red_flow",
-            description="Importa um flow para o Node-RED a partir de um arquivo JSON",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Caminho do arquivo JSON a ser importado"
-                    },
-                    "flow_name": {
-                        "type": "string",
-                        "description": "Nome para o flow importado (opcional)"
-                    }
-                },
-                "required": ["file_path"]
-            }
-        ),
-
         Tool(
             name="control_gpio_mcp",
             description="Controla GPIO individual via API MCP do Node-RED",
@@ -321,6 +183,136 @@ async def handle_list_tools() -> List[Tool]:
                 },
                 "required": []
             }
+        ),
+        Tool(
+            name="get_dht_sensor_mcp",
+            description="Obtém a leitura atual de temperatura e umidade do sensor DHT11 via Node-RED",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="set_sensor_alert",
+            description=(
+                "Configura limiares de alerta para o sensor DHT11. "
+                "Quando a temperatura ou umidade cruzar o limiar configurado, o alerta é armazenado "
+                "e pode ser consultado com get_sensor_alerts para tomar ação (ex: ligar ventilador)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "temp_above": {
+                        "type": "number",
+                        "description": "Disparar alerta se temperatura SUBIR acima deste valor (°C)"
+                    },
+                    "temp_below": {
+                        "type": "number",
+                        "description": "Disparar alerta se temperatura CAIR abaixo deste valor (°C)"
+                    },
+                    "humidity_above": {
+                        "type": "number",
+                        "description": "Disparar alerta se umidade SUBIR acima deste valor (%)"
+                    },
+                    "humidity_below": {
+                        "type": "number",
+                        "description": "Disparar alerta se umidade CAIR abaixo deste valor (%)"
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="get_sensor_alerts",
+            description=(
+                "Retorna todos os alertas do sensor DHT11 que foram disparados desde a última consulta. "
+                "Use esta ferramenta para verificar se algum limiar foi cruzado e depois tome a ação adequada "
+                "(ex: ligar ventilador com control_gpio_mcp, notificar usuário, etc)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "clear_after_read": {
+                        "type": "boolean",
+                        "description": "Se true, limpa a fila após leitura (padrão: true)",
+                        "default": True
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="clear_sensor_alerts",
+            description="Limpa toda a fila de alertas pendentes do sensor DHT11.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="set_action_plan",
+            description=(
+                "Cria ou atualiza um plano de ação autônomo baseado em sensor. "
+                "O Node-RED executa a ação GPIO automaticamente a cada leitura do DHT11 (30s), "
+                "sem precisar do Gemini ativo. Registre também o raciocínio no campo 'description'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "trigger": {
+                        "type": "string",
+                        "enum": ["temp_above", "temp_below", "humidity_above", "humidity_below"],
+                        "description": "Condição que dispara a ação"
+                    },
+                    "threshold": {
+                        "type": "number",
+                        "description": "Valor do limiar (°C para temperatura, % para umidade)"
+                    },
+                    "pin": {
+                        "type": "integer",
+                        "description": "Pino GPIO do ESP8266 a ser acionado"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["on", "off"],
+                        "description": "Ação a executar: ligar ou desligar o pino"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Descrição do objetivo deste plano (ex: 'ligar ventilador quando quente')"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "ID único do plano (para atualizar um existente). Omitir para criar novo."
+                    }
+                },
+                "required": ["trigger", "threshold", "pin", "action"]
+            }
+        ),
+        Tool(
+            name="list_action_plans",
+            description="Lista todos os planos de ação autônomos ativos no Node-RED.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="delete_action_plan",
+            description="Remove um plano de ação autônomo pelo ID.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "ID do plano a remover (obtido com list_action_plans)"
+                    }
+                },
+                "required": ["id"]
+            }
         )
     ]
 
@@ -330,24 +322,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
     Manipula chamadas para as ferramentas do servidor
     """
     try:
-        if name == "create_node_red_flow":
-            return await create_node_red_flow(arguments)
-        elif name == "get_node_red_flow":
-            return await get_node_red_flow(arguments)
-        elif name == "update_node_red_flow":
-            return await update_node_red_flow(arguments)
-        elif name == "delete_node_red_flow":
-            return await delete_node_red_flow(arguments)
-        elif name == "deploy_node_red_flows":
-            return await deploy_node_red_flows(arguments)
-        elif name == "get_node_red_nodes":
-            return await get_node_red_nodes(arguments)
-        elif name == "export_node_red_flow":
-            return await export_node_red_flow(arguments)
-        elif name == "import_node_red_flow":
-            return await import_node_red_flow(arguments)
-
-        elif name == "control_gpio_mcp":
+        if name == "control_gpio_mcp":
             return await control_gpio_mcp(arguments)
         elif name == "control_multiple_gpio_mcp":
             return await control_multiple_gpio_mcp(arguments)
@@ -357,271 +332,26 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
             return await list_mcp_tools(arguments)
         elif name == "deploy_mcp_gpio_flow":
             return await deploy_mcp_gpio_flow(arguments)
+        elif name == "get_dht_sensor_mcp":
+            return await get_dht_sensor_mcp(arguments)
+        elif name == "set_sensor_alert":
+            return await set_sensor_alert(arguments)
+        elif name == "get_sensor_alerts":
+            return await get_sensor_alerts(arguments)
+        elif name == "clear_sensor_alerts":
+            return await clear_sensor_alerts(arguments)
+        elif name == "set_action_plan":
+            return await set_action_plan(arguments)
+        elif name == "list_action_plans":
+            return await list_action_plans(arguments)
+        elif name == "delete_action_plan":
+            return await delete_action_plan(arguments)
         else:
             raise ValueError(f"Ferramenta desconhecida: {name}")
     
     except Exception as e:
         logger.error(f"Erro ao executar ferramenta {name}: {str(e)}")
         return [TextContent(type="text", text=f"Erro: {str(e)}")]
-
-# Implementação das ferramentas
-async def create_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Cria um novo flow no Node-RED"""
-    try:
-        flow_name = arguments["flow_name"]
-        nodes = arguments["nodes"]
-        
-        # Gerar ID único para o flow
-        import uuid
-        flow_id = str(uuid.uuid4())
-        
-        # Criar estrutura do flow
-        flow_data = {
-            "id": flow_id,
-            "label": flow_name,
-            "nodes": [],
-            "subflows": [],
-            "configs": []
-        }
-        
-        # Adicionar nós ao flow
-        for i, node in enumerate(nodes):
-            node_data = {
-                "id": str(uuid.uuid4()),
-                "type": node.get("type", "inject"),
-                "name": node.get("name", f"Node {i+1}"),
-                "x": 100 + (i * 200),  # Posicionamento horizontal
-                "y": 100,
-                "z": flow_id,
-                "wires": [[]]
-            }
-            
-            # Adicionar configurações específicas do nó
-            if "config" in node:
-                node_data.update(node["config"])
-            
-            flow_data["nodes"].append(node_data)
-        
-        # Conectar nós em sequência (opcional)
-        for i in range(len(flow_data["nodes"]) - 1):
-            current_node = flow_data["nodes"][i]
-            next_node = flow_data["nodes"][i + 1]
-            current_node["wires"] = [[next_node["id"]]]
-        
-        # Obter flows existentes
-        existing_flows = await node_red_api.get_flows()
-        
-        # Adicionar novo flow
-        existing_flows.append(flow_data)
-        
-        # Enviar para Node-RED
-        result = await node_red_api.post_flows(existing_flows)
-        
-        return [TextContent(
-            type="text",
-            text=f"Flow '{flow_name}' criado com sucesso! ID: {flow_id}\n"
-                 f"Resultado: {json.dumps(result, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao criar flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao criar flow: {str(e)}"
-        )]
-
-async def get_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Obtém informações sobre um flow específico"""
-    try:
-        flow_id = arguments["flow_id"]
-        flow_data = await node_red_api.get_flow(flow_id)
-        
-        return [TextContent(
-            type="text",
-            text=f"Informações do Flow ID: {flow_id}\n"
-                 f"{json.dumps(flow_data, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao obter flow: {str(e)}"
-        )]
-
-async def update_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Atualiza um flow existente"""
-    try:
-        flow_id = arguments["flow_id"]
-        updates = arguments["updates"]
-        
-        # Obter flow atual
-        current_flow = await node_red_api.get_flow(flow_id)
-        
-        # Aplicar atualizações
-        current_flow.update(updates)
-        
-        # Enviar atualização
-        result = await node_red_api.put_flow(flow_id, current_flow)
-        
-        return [TextContent(
-            type="text",
-            text=f"Flow '{flow_id}' atualizado com sucesso!\n"
-                 f"Resultado: {json.dumps(result, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao atualizar flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao atualizar flow: {str(e)}"
-        )]
-
-async def delete_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Remove um flow do Node-RED"""
-    try:
-        flow_id = arguments["flow_id"]
-        result = await node_red_api.delete_flow(flow_id)
-        
-        return [TextContent(
-            type="text",
-            text=f"Flow '{flow_id}' removido com sucesso!\n"
-                 f"Resultado: {json.dumps(result, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao remover flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao remover flow: {str(e)}"
-        )]
-
-async def deploy_node_red_flows(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Faz deploy dos flows no Node-RED"""
-    try:
-        deployment_type = arguments.get("deployment_type", "full")
-        
-        # Obter flows atuais
-        flows = await node_red_api.get_flows()
-        
-        # Fazer deploy
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{node_red_api.base_url}/flows",
-                json=flows,
-                headers={**node_red_api.headers, "Node-RED-Deployment-Type": deployment_type}
-            )
-            response.raise_for_status()
-            result = response.json()
-        
-        return [TextContent(
-            type="text",
-            text=f"Deploy realizado com sucesso! Tipo: {deployment_type}\n"
-                 f"Resultado: {json.dumps(result, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao fazer deploy: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao fazer deploy: {str(e)}"
-        )]
-
-async def get_node_red_nodes(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Lista todos os tipos de nós disponíveis"""
-    try:
-        nodes_data = await node_red_api.get_nodes()
-        
-        category = arguments.get("category")
-        if category:
-            # Filtrar por categoria se especificada
-            filtered_nodes = [
-                node for node in nodes_data 
-                if node.get("category", "").lower() == category.lower()
-            ]
-            nodes_data = filtered_nodes
-        
-        return [TextContent(
-            type="text",
-            text=f"Nós disponíveis no Node-RED:\n"
-                 f"{json.dumps(nodes_data, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter nós: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao obter nós: {str(e)}"
-        )]
-
-async def export_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Exporta um flow para arquivo JSON"""
-    try:
-        flow_id = arguments["flow_id"]
-        file_path = arguments["file_path"]
-        
-        # Obter flow
-        flow_data = await node_red_api.get_flow(flow_id)
-        
-        # Salvar em arquivo
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(flow_data, f, indent=2, ensure_ascii=False)
-        
-        return [TextContent(
-            type="text",
-            text=f"Flow '{flow_id}' exportado com sucesso para: {file_path}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao exportar flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao exportar flow: {str(e)}"
-        )]
-
-async def import_node_red_flow(arguments: Dict[str, Any]) -> List[TextContent]:
-    """Importa um flow de arquivo JSON"""
-    try:
-        file_path = arguments["file_path"]
-        flow_name = arguments.get("flow_name")
-        
-        # Ler arquivo
-        with open(file_path, 'r', encoding='utf-8') as f:
-            flow_data = json.load(f)
-        
-        # Atualizar nome se fornecido
-        if flow_name:
-            flow_data["label"] = flow_name
-        
-        # Gerar novo ID se necessário
-        if "id" not in flow_data:
-            import uuid
-            flow_data["id"] = str(uuid.uuid4())
-        
-        # Obter flows existentes
-        existing_flows = await node_red_api.get_flows()
-        
-        # Adicionar flow importado
-        existing_flows.append(flow_data)
-        
-        # Enviar para Node-RED
-        result = await node_red_api.post_flows(existing_flows)
-        
-        return [TextContent(
-            type="text",
-            text=f"Flow importado com sucesso de: {file_path}\n"
-                 f"ID: {flow_data['id']}\n"
-                 f"Resultado: {json.dumps(result, indent=2)}"
-        )]
-        
-    except Exception as e:
-        logger.error(f"Erro ao importar flow: {str(e)}")
-        return [TextContent(
-            type="text",
-            text=f"Erro ao importar flow: {str(e)}"
-        )]
-
-
 
 async def control_gpio_mcp(arguments: Dict[str, Any]) -> List[TextContent]:
     """Controla GPIO individual via API MCP do Node-RED"""
@@ -891,6 +621,224 @@ async def deploy_mcp_gpio_flow(arguments: Dict[str, Any]) -> List[TextContent]:
             type="text",
             text=f"Erro ao implantar flow MCP GPIO: {str(e)}"
         )]
+
+async def get_dht_sensor_mcp(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Obtém leitura de temperatura e umidade do sensor DHT11"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{node_red_api.base_url}/mcp/sensor/dht",
+                headers={"Content-Type": "application/json"}
+            )
+            result = response.json()
+
+        if response.status_code == 503:
+            return [TextContent(type="text", text=f"Sensor DHT11 ainda sem dados. {result.get('error', '')}")]
+
+        data = result.get("result", {})
+        text = (
+            f"Leitura do sensor DHT11:\n"
+            f"  Temperatura : {data.get('temperature', 'N/A')} °C\n"
+            f"  Umidade     : {data.get('humidity', 'N/A')} %\n"
+            f"  Device      : {data.get('device_id', 'N/A')}\n"
+            f"  Atualizado  : {data.get('timestamp', 'N/A')}"
+        )
+        return [TextContent(type="text", text=text)]
+
+    except Exception as e:
+        logger.error(f"Erro ao ler DHT sensor: {str(e)}")
+        return [TextContent(type="text", text=f"Erro ao ler sensor DHT11: {str(e)}")]
+
+
+async def set_sensor_alert(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Configura limiares de alerta para o sensor DHT11"""
+    try:
+        config = {}
+        if "temp_above" in arguments:
+            config["temp_above"] = float(arguments["temp_above"])
+        if "temp_below" in arguments:
+            config["temp_below"] = float(arguments["temp_below"])
+        if "humidity_above" in arguments:
+            config["humidity_above"] = float(arguments["humidity_above"])
+        if "humidity_below" in arguments:
+            config["humidity_below"] = float(arguments["humidity_below"])
+
+        if not config:
+            return [TextContent(type="text", text="Nenhum limiar informado. Informe pelo menos um: temp_above, temp_below, humidity_above ou humidity_below.")]
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{node_red_api.base_url}/mcp/sensor/alerts/config",
+                json=config,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        saved = result.get("config", config)
+        lines = ["Alertas configurados com sucesso! O sensor será monitorado a cada leitura (~30s).\n"]
+        lines.append("Limiares ativos:")
+        if "temp_above"    in saved: lines.append(f"  • Temperatura ACIMA de {saved['temp_above']} °C")
+        if "temp_below"    in saved: lines.append(f"  • Temperatura ABAIXO de {saved['temp_below']} °C")
+        if "humidity_above" in saved: lines.append(f"  • Umidade ACIMA de {saved['humidity_above']} %")
+        if "humidity_below" in saved: lines.append(f"  • Umidade ABAIXO de {saved['humidity_below']} %")
+        lines.append("\nUse get_sensor_alerts() para verificar se algum alerta foi disparado.")
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    except Exception as e:
+        logger.error(f"Erro ao configurar alertas: {str(e)}")
+        return [TextContent(type="text", text=f"Erro ao configurar alertas: {str(e)}")]
+
+
+async def get_sensor_alerts(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Retorna alertas disparados do sensor DHT11"""
+    try:
+        clear = arguments.get("clear_after_read", True)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{node_red_api.base_url}/mcp/sensor/alerts")
+            response.raise_for_status()
+            result = response.json()
+
+        alerts = result.get("alerts", [])
+        config = result.get("config", {})
+
+        if not alerts:
+            cfg_lines = []
+            if config:
+                if "temp_above"    in config: cfg_lines.append(f"temperatura > {config['temp_above']} °C")
+                if "temp_below"    in config: cfg_lines.append(f"temperatura < {config['temp_below']} °C")
+                if "humidity_above" in config: cfg_lines.append(f"umidade > {config['humidity_above']} %")
+                if "humidity_below" in config: cfg_lines.append(f"umidade < {config['humidity_below']} %")
+                return [TextContent(type="text", text=f"Nenhum alerta pendente.\nMonitorando: {', '.join(cfg_lines)}")]
+            return [TextContent(type="text", text="Nenhum alerta pendente e nenhum limiar configurado. Use set_sensor_alert() primeiro.")]
+
+        lines = [f"ALERTA: {len(alerts)} alerta(s) disparado(s)!\n"]
+        for a in alerts:
+            tipo = "Temperatura" if a["type"] == "temperature" else "Umidade"
+            unidade = "°C" if a["type"] == "temperature" else "%"
+            lines.append(f"  [{a['timestamp']}] {tipo} {a['condition']} do limiar {a['threshold']}{unidade} → valor: {a['value']}{unidade}")
+
+        lines.append("\nAção sugerida: use control_gpio_mcp() para ligar/desligar dispositivos conforme necessário.")
+
+        if clear:
+            async with httpx.AsyncClient() as client:
+                await client.post(f"{node_red_api.base_url}/mcp/sensor/alerts/clear")
+            lines.append("(Fila limpa após leitura)")
+
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    except Exception as e:
+        logger.error(f"Erro ao ler alertas: {str(e)}")
+        return [TextContent(type="text", text=f"Erro ao ler alertas: {str(e)}")]
+
+
+async def clear_sensor_alerts(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Limpa a fila de alertas pendentes do sensor DHT11"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{node_red_api.base_url}/mcp/sensor/alerts/clear")
+            response.raise_for_status()
+        return [TextContent(type="text", text="Fila de alertas limpa com sucesso.")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Erro ao limpar alertas: {str(e)}")]
+
+
+async def set_action_plan(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Cria ou atualiza um plano de ação autônomo baseado em sensor"""
+    try:
+        payload = {
+            "trigger":     arguments["trigger"],
+            "threshold":   float(arguments["threshold"]),
+            "pin":         int(arguments["pin"]),
+            "action":      arguments["action"],
+            "description": arguments.get("description", ""),
+        }
+        if "id" in arguments:
+            payload["id"] = arguments["id"]
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{node_red_api.base_url}/mcp/action/plan",
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        plan = result.get("plan", payload)
+        trigger_label = {
+            "temp_above":     f"temperatura SUBIR acima de {plan['threshold']} °C",
+            "temp_below":     f"temperatura CAIR abaixo de {plan['threshold']} °C",
+            "humidity_above": f"umidade SUBIR acima de {plan['threshold']} %",
+            "humidity_below": f"umidade CAIR abaixo de {plan['threshold']} %",
+        }.get(plan["trigger"], plan["trigger"])
+
+        lines = [
+            f"Plano de ação criado! ID: {plan['id']}",
+            f"",
+            f"Regra: quando {trigger_label}",
+            f"Ação:  pino {plan['pin']} → {plan['action'].upper()}",
+            f"Descrição: {plan.get('description') or '—'}",
+            f"",
+            f"O Node-RED executará esta ação automaticamente a cada leitura do sensor (~30s).",
+            f"Use list_action_plans() para ver todos os planos ativos.",
+        ]
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    except Exception as e:
+        logger.error(f"Erro ao criar plano: {str(e)}")
+        return [TextContent(type="text", text=f"Erro ao criar plano de ação: {str(e)}")]
+
+
+async def list_action_plans(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Lista planos de ação autônomos ativos"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{node_red_api.base_url}/mcp/action/plans")
+            response.raise_for_status()
+            result = response.json()
+
+        plans = result.get("plans", [])
+        if not plans:
+            return [TextContent(type="text", text="Nenhum plano de ação configurado. Use set_action_plan() para criar um.")]
+
+        trigger_labels = {
+            "temp_above":     "temperatura >",
+            "temp_below":     "temperatura <",
+            "humidity_above": "umidade >",
+            "humidity_below": "umidade <",
+        }
+        lines = [f"Planos de ação ativos ({len(plans)} total):\n"]
+        for p in plans:
+            status = "ativo" if p.get("active", True) else "inativo"
+            label = trigger_labels.get(p["trigger"], p["trigger"])
+            unidade = "°C" if "temp" in p["trigger"] else "%"
+            lines.append(f"  [{p['id']}] {status.upper()}")
+            lines.append(f"    Regra: {label} {p['threshold']}{unidade} → pino {p['pin']} {p['action'].upper()}")
+            if p.get("description"):
+                lines.append(f"    Descrição: {p['description']}")
+            lines.append("")
+        return [TextContent(type="text", text="\n".join(lines))]
+
+    except Exception as e:
+        return [TextContent(type="text", text=f"Erro ao listar planos: {str(e)}")]
+
+
+async def delete_action_plan(arguments: Dict[str, Any]) -> List[TextContent]:
+    """Remove um plano de ação autônomo pelo ID"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{node_red_api.base_url}/mcp/action/plan/delete",
+                json={"id": arguments["id"]},
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+        return [TextContent(type="text", text=f"Plano '{arguments['id']}' removido com sucesso.")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Erro ao remover plano: {str(e)}")]
+
 
 # Função principal para executar o servidor
 async def main():

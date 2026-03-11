@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Credenciais do firmware ESP8266 (contém senha WiFi/MQTT)
+esp8266_firmware/config.h
+
+# Arduino IDE
+esp8266_firmware/*.elf
+esp8266_firmware/*.bin
+esp8266_firmware/*.hex
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
